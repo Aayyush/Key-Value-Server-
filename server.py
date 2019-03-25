@@ -37,108 +37,118 @@ from __future__ import print_function
 # functions are in library.py.
 import library
 
+# Command line parser.
+import optparse
+
 
 # The port that we accept connections on. (A.k.a. "listen" on.)
 LISTENING_PORT = 7777
 
 
 def PutCommand(name, text, database):
-  """Handle the PUT command for a server.
+    """Handle the PUT command for a server.
 
-  PUT's first argument is the name of the key to store the value under.
-  All remaining arguments are stitched together and used as the value.
+    PUT's first argument is the name of the key to store the value under.
+    All remaining arguments are stitched together and used as the value.
 
-  Args:
-    name: The name of the value to store.
-    text: The value to store.
-    database: A KeyValueStore containing key/value pairs.
-  Returns:
-    A human readable string describing the result. If there is an error,
-    then the string describes the error.
-  """
-  # Store the value in the database.
-  ##########################################
-  #TODO: Implement PUT function
-  ##########################################
+    Args:
+      name: The name of the value to store.
+      text: The value to store.
+      database: A KeyValueStore containing key/value pairs.
+    Returns:
+      A human readable string describing the result. If there is an error,
+      then the string describes the error.
+    """
+    print('%s: %s stored in the database' % (name, text))
+    database.StoreValue(name, text)
+    return "Key: {0}, Value: {1} stored in the database successfully".format(name, text)
 
 
 def GetCommand(name, database):
-  """Handle the GET command for a server.
+    """Handle the GET command for a server.
 
-  GET takes a single argument: the name of the key to look up.
+    GET takes a single argument: the name of the key to look up.
 
-  Args:
-    name: The name of the value to retrieve.
-    database: A KeyValueStore containing key/value pairs.
-  Returns:
-    A human readable string describing the result. If there is an error,
-    then the string describes the error.
-  """
-  ##########################################
-  #TODO: Implement GET function
-  ##########################################
+    Args:
+      name: The name of the value to retrieve.
+      database: A KeyValueStore containing key/value pairs.
+    Returns:
+      A human readable string describing the result. If there is an error,
+      then the string describes the error.
+    """
+    print('Retrieving key %s from the database' % name)
+    text = database.GetValue(name)
+    if not text:
+        return "Key: {0} record does not exist in the database".format(name)
+    return "Key: {0}, Value: {1}".format(name, text)
 
 
 def DumpCommand(database):
-  """Creates a function to handle the DUMP command for a server.
+    """Creates a function to handle the DUMP command for a server.
 
-  DUMP takes no arguments. It always returns a CSV containing all keys.
+    DUMP takes no arguments. It always returns a CSV containing all keys.
 
-  Args:
-    database: A KeyValueStore containing key/value pairs.
-  Returns:
-    A human readable string describing the result. If there is an error,
-    then the string describes the error.
-  """
-
-  ##########################################
-  #TODO: Implement DUMP function
-  ##########################################
-  
- 
+    Args:
+      database: A KeyValueStore containing key/value pairs.
+    Returns:
+      A human readable string describing the result. If there is an error,
+      then the string describes the error.
+    """
+    print("Retrieving all the keys from the database")
+    return 'The keys in the database are: {0}'.format(','.join(database.Keys()))
 
 
 def SendText(sock, text):
-  """Sends the result over the socket along with a newline."""
-  sock.send('%s\n' % text)
+    """Sends the result over the socket along with a newline."""
+    sock.send('%s\n' % text)
 
 
-def main():
-  # Store all key/value pairs in here.
-  database = library.KeyValueStore()
-  # The server socket that will listen on the specified port. If you don't
-  # have permission to listen on the port, try a higher numbered port.
-  server_sock = library.CreateServerSocket(LISTENING_PORT)
-
-  # Handle commands indefinitely. Use ^C to exit the program.
-  while True:
-    # Wait until a client connects and then get a socket that connects to the
-    # client.
-    client_sock, (address, port) = library.ConnectClientToServer(server_sock)
-    print('Received connection from %s:%d' % (address, port))
-
-    # Read a command.
-    command_line = library.ReadCommand(client_sock)
-    command, name, text = library.ParseCommand(command_line)
-
-    # Execute the command based on the first word in the command line.
-    if command == 'PUT':
-      result = PutCommand(name, text, database)
-    elif command == 'GET':
-      result = GetCommand(name, database)
-    elif command == 'DUMP':
-      result = DumpCommand(database)
+def main(records_file=None):
+    # Store all key/value pairs in here.
+    if records_file:
+        database = library.KeyValueStore(fileName=records_file)
     else:
-      SendText(client_sock, 'Unknown command %s' % command)
+        database = library.KeyValueStore()
+    # The server socket that will listen on the specified port. If you don't
+    # have permission to listen on the port, try a higher numbered port.
+    server_sock = library.CreateServerSocket(LISTENING_PORT)
+    # Handle commands indefinitely. Use ^C to exit the program.
+    try:
+        while True:
+            # Wait until a client connects and then get a socket that connects to the
+            # client.
+            client_sock, (address, port) = library.ConnectClientToServer(
+                server_sock)
+            print('Received connection from %s:%d' % (address, port))
 
-    SendText(client_sock, result)
+            # Read a command.
+            command_line = library.ReadCommand(client_sock)
+            command, name, text = library.ParseCommand(command_line)
 
-    # We're done with the client, so clean up the socket.
+            # Execute the command based on the first word in the command line.
+            if command == 'PUT':
+                result = PutCommand(name, text, database)
+            elif command == 'GET':
+                result = GetCommand(name, database)
+            elif command == 'DUMP':
+                result = DumpCommand(database)
+            else:
+                SendText(client_sock, 'Unknown command %s' % command)
 
-    #################################
-    #TODO: Close socket's connection
-    #################################
-    
+            SendText(client_sock, result)
+
+            # We're done with the client, so clean up the socket.
+            client_sock.close()
+    except KeyboardInterrupt:
+        # Write records to a file, which can be restored later.
+        server_sock.close()
+        with open("server-records.txt", 'w') as fileHandle:
+            fileHandle.write(str(database))
 
 
-main()
+parser = optparse.OptionParser()
+parser.add_option('-d', '--database', action='store',
+                  dest='database', default=None)
+option, args = parser.parse_args()
+
+main(option.database)

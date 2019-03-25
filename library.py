@@ -27,135 +27,129 @@ COMMAND_BUFFER_SIZE = 256
 
 
 def CreateServerSocket(port):
-  """Creates a socket that listens on a specified port.
+    """Creates a socket that listens on a specified port.
 
-  Args:
-    port: int from 0 to 2^16. Low numbered ports have defined purposes. Almost
-        all predefined ports represent insecure protocols that have died out.
-  Returns:
-    An socket that implements TCP/IP.
-  """
+    Args:
+      port: int from 0 to 2^16. Low numbered ports have defined purposes. Almost
+          all predefined ports represent insecure protocols that have died out.
+    Returns:
+      An socket that implements TCP/IP.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('localhost', port))
+    return sock
 
-    #############################################
-    #TODO: Implement CreateServerSocket Function
-    #############################################
 
 def ConnectClientToServer(server_sock):
     # Wait until a client connects and then get a socket that connects to the
     # client.
-    
-
-    #############################################
-    #TODO: Implement CreateClientSocket Function
-    #############################################
-    
-
+    server_sock.listen(1)
+    client_socket, client_address = server_sock.accept()
+    return client_socket, (client_address, client_socket.getsockname()[1])
 
 
 def CreateClientSocket(server_addr, port):
-  """Creates a socket that connects to a port on a server."""
+    """Creates a socket that connects to a port on a server."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((server_addr, port))
+    return sock
 
-    #############################################
-    #TODO: Implement CreateClientSocket Function
-    #############################################
-  
 
 def ReadCommand(sock):
-  """Read a single command from a socket. The command must end in newline."""
-
-    #############################################
-    #TODO: Implement ReadCommand Function
-    #############################################
-  
+    """Read a single command from a socket. The command must end in newline."""
+    return sock.recv(COMMAND_BUFFER_SIZE)
 
 
 def ParseCommand(command):
-  """Parses a command and returns the command name, first arg, and remainder.
+    """Parses a command and returns the command name, first arg, and remainder.
 
-  All commands are of the form:
-      COMMAND arg1 remaining text is called remainder
-  Spaces separate the sections, but the remainder can contain additional spaces.
-  The returned values are strings if the values are present or `None`. Trailing
-  whitespace is removed.
+    All commands are of the form:
+        COMMAND arg1 remaining text is called remainder
+    Spaces separate the sections, but the remainder can contain additional spaces.
+    The returned values are strings if the values are present or `None`. Trailing
+    whitespace is removed.
 
-  Args:
-    command: string command.
-  Returns:
-    command, arg1, remainder. Each of these can be None.
-  """
-  args = command.strip().split(' ')
-  command = None
-  if args:
-    command = args[0]
-  arg1 = None
-  if len(args) > 1:
-    arg1 = args[1]
-  remainder = None
-  if len(args) > 2:
-    remainder = ' '.join(args[2:])
-  return command, arg1, remainder
+    Args:
+      command: string command.
+    Returns:
+      command, arg1, remainder. Each of these can be None.
+    """
+    args = command.strip().split(' ')
+    command = None
+    if args:
+        command = args[0]
+    arg1 = None
+    if len(args) > 1:
+        arg1 = args[1]
+    remainder = None
+    if len(args) > 2:
+        remainder = ' '.join(args[2:])
+    return command, arg1, remainder
+
+
+class Record:
+    def __init__(self, value, stored_time=None):
+        self.value = value
+        self.stored_time = time.time() if not stored_time else stored_time
+
+    def get_time_elapsed(self, time):
+        return time - self.stored_time
 
 
 class KeyValueStore(object):
-  """A dictionary of strings keyed by strings.
+    """A dictionary of strings keyed by strings.
 
-  The values can time out once they get sufficiently old. Otherwise, this
-  acts much like a dictionary.
-  """
-
-  def __init__(self):
-
-    ###########################################
-    #TODO: Implement __init__ Function
-    ###########################################
-    
-
-  def GetValue(self, key, max_age_in_sec=None):
-    """Gets a cached value or `None`.
-
-    Values older than `max_age_in_sec` seconds are not returned.
-
-    Args:
-      key: string. The name of the key to get.
-      max_age_in_sec: float. Maximum time since the value was placed in the
-        KeyValueStore. If not specified then values do not time out.
-    Returns:
-      None or the value.
-    """
-    # Check if we've ever put something in the cache.
-
-    ###########################################
-    #TODO: Implement GetValue Function
-    ###########################################
-
-
-
-  def StoreValue(self, key, value):
-    """Stores a value under a specific key.
-
-    Args:
-      key: string. The name of the value to store.
-      value: string. A value to store.
+    The values can time out once they get sufficiently old. Otherwise, this
+    acts much like a dictionary.
     """
 
-    ###########################################
-    #TODO: Implement StoreValue Function
-    ###########################################
+    def read_file_into_store(self, fileName):
+        with open(fileName, 'r') as fileHandle:
+            for record in fileHandle.readlines():
+                record = record.split(',')
+                self.store[record[0]] = Record(record[1], float(record[2]))
 
-    
+    def __init__(self, fileName=None):
+        self.store = {}
+        if fileName:
+            self.read_file_into_store(fileName)
 
-  def Keys(self):
-    """Returns a list of all keys in the datastore."""
+    def GetValue(self, key, max_age_in_sec=None):
+        """Gets a cached value or `None`.
 
-    ###########################################
-    #TODO: Implement Keys Function
-    ###########################################
-    
+        Values older than `max_age_in_sec` seconds are not returned.
 
+        Args:
+          key: string. The name of the key to get.
+          max_age_in_sec: float. Maximum time since the value was placed in the
+            KeyValueStore. If not specified then values do not time out.
+        Returns:
+          None or the value.
+        """
+        record = self.store.get(key, None)
+        if not record:
+            return None
+        if not max_age_in_sec:
+            return record.value
+        return record.value if record.get_time_elapsed(time.time()) < max_age_in_sec else None
 
+    def StoreValue(self, key, value):
+        """Stores a value under a specific key.
 
+        Args:
+          key: string. The name of the value to store.
+          value: string. A value to store.
+        """
+        self.store[key] = Record(value)
 
+    def Keys(self):
+        """Returns a list of all keys in the datastore."""
+        return self.store.keys()
 
-
-
-
+    def __str__(self):
+        return_string = ""
+        for key, record in self.store.iteritems():
+            print(key, record.value, record.stored_time)
+            return_string += "% s, % s, % d\n" % (key,
+                                                  record.value, record.stored_time)
+        return return_string
