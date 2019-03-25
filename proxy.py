@@ -99,7 +99,8 @@ def main(records_file=None):
     server_sock = library.CreateServerSocket(LISTENING_PORT)
     if records_file:
         try:
-            database = library.KeyValueStore(fileName=records_file)
+            database = library.KeyValueStore(
+                fileName=records_file, isTimer=True)
         except library.InvalidRecordFormatException as e:
             print(e)
             print("Initializing an empty cache.")
@@ -109,7 +110,7 @@ def main(records_file=None):
             print("Initializing an empty cache.")
             database = library.KeyValueStore()
     else:
-        cache = library.KeyValueStore()
+        cache = library.KeyValueStore(isTimer=True)
     # Accept incoming commands indefinitely.
     try:
         while True:

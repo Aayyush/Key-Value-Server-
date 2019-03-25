@@ -18,12 +18,14 @@ from __future__ import print_function
 import socket
 
 import time
+from threading import Timer
 
 # Read this many bytes at a time of a command. Each socket holds a buffer of
 # data that comes in. If the buffer fills up before you can read it then TCP
 # will slow down transmission so you can keep up. We expect that most commands
 # will be shorter than this.
 COMMAND_BUFFER_SIZE = 256
+MAX_CACHE_AGE_SEC = 60.0
 
 
 def CreateServerSocket(port):
@@ -117,10 +119,34 @@ class KeyValueStore(object):
     acts much like a dictionary.
     """
 
-    def __init__(self, fileName=None):
+    """
+    If fileName is passed, the dictionary is initialized with the records 
+    in the file. 
+
+    If isTimer is set to true, a callback is registered to clean the store 
+    every 5 seconds if the time-elapsed is greated than MAX_CACHE_AGE_SEC
+    """
+
+    def __init__(self, fileName=None, isTimer=False):
         self.store = {}
         if fileName:
             self.read_file_into_store(fileName)
+
+        def callback_to_clean_store(*args):
+            st = args[0]
+            for key in list(st):
+                if st[key].get_time_elapsed(time.time()) > MAX_CACHE_AGE_SEC:
+                    print("Removing key %s due to timeout" % key)
+                    del st[key]
+            t = Timer(5,
+                      callback_to_clean_store, [st])
+            t.start()
+
+        if isTimer:
+            print("Setting timer callback")
+            # Start a timer that cleans the store every 5 seconds.
+            t = Timer(5, callback_to_clean_store, [self.store])
+            t.start()
 
     def read_file_into_store(self, fileName):
         """
