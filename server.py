@@ -59,9 +59,8 @@ def PutCommand(name, text, database):
       A human readable string describing the result. If there is an error,
       then the string describes the error.
     """
-    print('%s: %s stored in the database' % (name, text))
     database.StoreValue(name, text)
-    return "Key: {0}, Value: {1} stored in the database successfully".format(name, text)
+    return "{0} = {1}".format(name, text)
 
 
 def GetCommand(name, database):
@@ -80,7 +79,7 @@ def GetCommand(name, database):
     text = database.GetValue(name)
     if not text:
         return "Key: {0} record does not exist in the database".format(name)
-    return "Key: {0}, Value: {1}".format(name, text)
+    return text
 
 
 def DumpCommand(database):
@@ -94,8 +93,7 @@ def DumpCommand(database):
       A human readable string describing the result. If there is an error,
       then the string describes the error.
     """
-    print("Retrieving all the keys from the database")
-    return 'The keys in the database are: {0}'.format(','.join(database.Keys()))
+    return 'Keys: {0}'.format(', '.join(database.Keys()))
 
 
 def SendText(sock, text):
@@ -106,7 +104,16 @@ def SendText(sock, text):
 def main(records_file=None):
     # Store all key/value pairs in here.
     if records_file:
-        database = library.KeyValueStore(fileName=records_file)
+        try:
+            database = library.KeyValueStore(fileName=records_file)
+        except library.InvalidRecordFormatException as e:
+            print(e)
+            print("Initializing an empty database")
+            database = library.KeyValueStore()
+        except library.InvalidRecordTypeException as e:
+            print(e)
+            print("Initializing an empty database")
+            database = library.KeyValueStore()
     else:
         database = library.KeyValueStore()
     # The server socket that will listen on the specified port. If you don't
@@ -141,6 +148,7 @@ def main(records_file=None):
             client_sock.close()
     except KeyboardInterrupt:
         # Write records to a file, which can be restored later.
+        # Close the server socket.
         server_sock.close()
         with open("server-records.txt", 'w') as fileHandle:
             fileHandle.write(str(database))

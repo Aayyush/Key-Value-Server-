@@ -87,6 +87,12 @@ def ParseCommand(command):
     return command, arg1, remainder
 
 
+"""
+Blueprint of recrods store in the database. 
+Stores the time by default, only used when max_age specified in the get request. 
+"""
+
+
 class Record:
     def __init__(self, value, stored_time=None):
         self.value = value
@@ -96,6 +102,14 @@ class Record:
         return time - self.stored_time
 
 
+class InvalidRecordFormatException(Exception):
+    pass
+
+
+class InvalidRecordTypeException(Exception):
+    pass
+
+
 class KeyValueStore(object):
     """A dictionary of strings keyed by strings.
 
@@ -103,16 +117,26 @@ class KeyValueStore(object):
     acts much like a dictionary.
     """
 
-    def read_file_into_store(self, fileName):
-        with open(fileName, 'r') as fileHandle:
-            for record in fileHandle.readlines():
-                record = record.split(',')
-                self.store[record[0]] = Record(record[1], float(record[2]))
-
     def __init__(self, fileName=None):
         self.store = {}
         if fileName:
             self.read_file_into_store(fileName)
+
+    def read_file_into_store(self, fileName):
+        """
+        Helper method to read records from a text file. 
+        """
+        with open(fileName, 'r') as fileHandle:
+            try:
+                for record in fileHandle.readlines():
+                    record = record.split(',')
+                    if len(record) != 3:
+                        raise InvalidRecordFormatException(
+                            "File: %s does not have the records in proper format" % fileName)
+                    self.store[record[0]] = Record(record[1], float(record[2]))
+            except ValueError:
+                raise InvalidRecordTypeException(
+                    "File %s have records with improper data type" % fileName)
 
     def GetValue(self, key, max_age_in_sec=None):
         """Gets a cached value or `None`.
@@ -135,6 +159,7 @@ class KeyValueStore(object):
 
     def StoreValue(self, key, value):
         """Stores a value under a specific key.
+        Overwrites if an existing record with the same key exists. 
 
         Args:
           key: string. The name of the value to store.
@@ -147,9 +172,11 @@ class KeyValueStore(object):
         return self.store.keys()
 
     def __str__(self):
+        """
+        Helper method to write the records to a text file. 
+        """
         return_string = ""
         for key, record in self.store.iteritems():
-            print(key, record.value, record.stored_time)
             return_string += "% s, % s, % d\n" % (key,
                                                   record.value, record.stored_time)
         return return_string

@@ -48,19 +48,6 @@ def ForwardCommandToServer(command, server_addr, server_port):
     return library.ReadCommand(socket)
 
 
-# def CheckCachedResponse(command_line, cache):
-#   cmd, name, text = library.ParseCommand(command_line)
-
-#   # Update the cache for PUT commands but also pass the traffic to the server.
-#   if cmd == "PUT":
-#     cache.StoreValue(name, text)
-#   elif cmd == "GET":
-#     if cache.GetValue(name, MAX_CACHE_AGE_SEC):
-
-#     else:
-#       # Forward connection to the server.
-
-
 def ProxyClientCommand(sock, server_addr, server_port, cache):
     """Receives a command from a client and forwards it to a server:port.
 
@@ -80,17 +67,27 @@ def ProxyClientCommand(sock, server_addr, server_port, cache):
 
     cmd, name, text = library.ParseCommand(command_line)
 
-    if cmd == "GET" and cache.GetValue(name, MAX_CACHE_AGE_SEC):
-        print('Key %s in the cache.' % name)
-        sock.send("Key: {0}, Value: {1}".format(
-            name, cache.GetValue(name, MAX_CACHE_AGE_SEC)))
-        return
+    if cmd == "GET":
+        if cache.GetValue(name, MAX_CACHE_AGE_SEC):
+            print('Key %s in the cache.' % name)
+            sock.send("Key: {0}, Value: {1}\n".format(
+                name, cache.GetValue(name, MAX_CACHE_AGE_SEC)))
+            return
+
+        # Get record from the server, and update the cache.
+        serverResponse = ForwardCommandToServer(
+            command_line, server_addr, server_port)
+        cache.StoreValue(name, serverResponse)
     elif cmd == "PUT":
         print('Writing %s: %s to the cache' % (name, text))
         cache.StoreValue(name, text)
-    print("Forwarding the command to the server")
-    serverResponse = ForwardCommandToServer(
-        command_line, server_addr, server_port)
+        serverResponse = ForwardCommandToServer(
+            command_line, server_addr, server_port)
+    elif cmd == "DUMP":
+        serverResponse = ForwardCommandToServer(
+            command_line, server_addr, server_port)
+    else:
+        return
 
     # Forward the server response to the client.
     print("Forwarding the response from the server to the client")
@@ -101,7 +98,16 @@ def main(records_file=None):
     # Listen on a specified port...
     server_sock = library.CreateServerSocket(LISTENING_PORT)
     if records_file:
-        cache = library.KeyValueStore(fileName=records_file)
+        try:
+            database = library.KeyValueStore(fileName=records_file)
+        except library.InvalidRecordFormatException as e:
+            print(e)
+            print("Initializing an empty cache.")
+            database = library.KeyValueStore()
+        except library.InvalidRecordTypeException as e:
+            print(e)
+            print("Initializing an empty cache.")
+            database = library.KeyValueStore()
     else:
         cache = library.KeyValueStore()
     # Accept incoming commands indefinitely.
@@ -116,9 +122,11 @@ def main(records_file=None):
                                cache)
             client_sock.close()
     except KeyboardInterrupt:
+        # Close server socket.
+        # Write the records to a file for later use.
         server_sock.close()
         with open("proxy-records.txt", 'w') as fileHandle:
-                fileHandle.write(str(cache))
+            fileHandle.write(str(cache))
 
 
 parser = optparse.OptionParser()
